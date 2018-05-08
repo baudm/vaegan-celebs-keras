@@ -10,10 +10,10 @@ from keras.regularizers import l2
 
 
 def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
-    n_channels = 3
+    image_shape = (64, 64, 1)
+    n_channels = image_shape[-1]
     n_encoder = 1024
     n_discriminator = 512
-    image_shape = (64, 64, n_channels)
     latent_dim = 128
     epsilon_std = 1.0
     decode_from_shape = (8, 8, 256)
@@ -86,13 +86,18 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
     z_sampled = Input(shape=(latent_dim,), name='z_sampled')
     gan = Model(z_sampled, discriminator(decoder(z_sampled)), name='gan')
 
-    return encoder, decoder, discriminator, vae, gan
+    kl_loss = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
+    vae_loss = K.mean(kl_loss)
+    full_model = Model(input_image, discriminator(vae(input_image)), name='full_model')
+    full_model.add_loss(vae_loss)
 
+    return encoder, decoder, discriminator, vae, gan, full_model
 
-from keras.utils.vis_utils import plot_model
-e, d, dis, vae, gan = create_models()
-plot_model(e, show_shapes=True, to_file='encoder.png')
-plot_model(d, show_shapes=True, to_file='decoder.png')
-plot_model(dis, show_shapes=True, to_file='discriminator.png')
-plot_model(vae, show_shapes=True, to_file='vae.png')
-plot_model(gan, show_shapes=True, to_file='gan.png')
+#
+# from keras.utils.vis_utils import plot_model
+# e, d, dis, vae, gan = create_models()
+# plot_model(e, show_shapes=True, to_file='encoder.png')
+# plot_model(d, show_shapes=True, to_file='decoder.png')
+# plot_model(dis, show_shapes=True, to_file='discriminator.png')
+# plot_model(vae, show_shapes=True, to_file='vae.png')
+# plot_model(gan, show_shapes=True, to_file='gan.png')
