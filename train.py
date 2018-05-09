@@ -3,10 +3,23 @@
 import numpy as np
 
 from keras.datasets import mnist
+from keras.callbacks import TensorBoard
 from vaegan.models import create_models
 
+
 def main():
-    encoder, decoder, discriminator, vae, gan, model = create_models()
+    encoder, decoder, discriminator, vae, model = create_models()
+    #
+    # encoder.compile('rmsprop', 'mse')
+    #
+    # x = np.random.uniform(-1.0, 1.0, size=[1, 64, 64, 1])
+    # y1 = np.random.uniform(-1.0, 1.0, size=[1, 128])
+    # y2 = np.random.uniform(-1.0, 1.0, size=[1, 128])
+    #
+    # encoder.fit(x, [y1, y2], callbacks=[TensorBoard()])
+    #
+    # return
+
 
 
     train_steps = 10000
@@ -18,6 +31,8 @@ def main():
 
     x_train = np.pad(x_train, ((0, 0), (18, 18), (18, 18)), mode='constant', constant_values=0)
     x_train = np.expand_dims(x_train, -1)
+    x_train = (x_train.astype('float32') - 127.5) / 127.5
+    x_train = np.clip(x_train, -1., 1.)
 
 
     # Assume images in x_train
@@ -30,11 +45,12 @@ def main():
     import keras.callbacks as cbks
 
     verbose = True
-    callbacks = []
+    callbacks = [TensorBoard(batch_size=batch_size)]
 
-    epochs = 1
-    steps_per_epoch = 100
+    epochs = 100
+    steps_per_epoch = x_train.shape[0] // batch_size
     do_validation = False
+
     callback_metrics = ['disc_loss', 'disc_accuracy', 'vaegan_loss', 'vaegan_accuracy']
 
     model.history = cbks.History()
@@ -66,7 +82,6 @@ def main():
 
         for batch_index in range(steps_per_epoch):
             batch_logs = {}
-
             batch_logs['batch'] = batch_index
             batch_logs['size'] = batch_size
             callbacks.on_batch_begin(batch_index, batch_logs)
@@ -81,14 +96,14 @@ def main():
             inputs = np.concatenate([real_images[:half_batch], fake_images[:half_batch]])
 
             # Label real and fake images
-            y = np.ones([batch_size, 1])
+            y = np.ones([batch_size, 1], dtype='float32')
             y[half_batch:, :] = 0
 
             # Train the Discriminator network
             metrics = discriminator.train_on_batch(inputs, y)
             # print('discriminator', metrics)
 
-            y = np.ones([batch_size, 1])
+            y = np.ones([batch_size, 1], dtype='float32')
             vg_metrics = model.train_on_batch(fake_images, y)
             # print('full', metrics)
 
