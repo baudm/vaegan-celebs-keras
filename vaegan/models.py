@@ -89,7 +89,7 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
     vaegan = Model(vae.inputs, discriminator(vae.outputs), name='vaegan')
     vaegan.add_loss(vae_loss)
 
-    return encoder, decoder, discriminator, vae, vaegan
+    return encoder, decoder, discriminator, vae, vae_loss
 
 
 # from keras.utils.vis_utils import plot_model

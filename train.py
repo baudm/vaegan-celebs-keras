@@ -2,13 +2,17 @@
 
 import numpy as np
 
+from keras import Model
 from keras.datasets import mnist
 from keras.callbacks import TensorBoard
+
 from vaegan.models import create_models
+
+import cv2
 
 
 def main():
-    encoder, decoder, discriminator, vae, model = create_models()
+    encoder, decoder, discriminator, vae, vae_loss = create_models()
     #
     # encoder.compile('rmsprop', 'mse')
     #
@@ -22,14 +26,21 @@ def main():
 
 
 
-    train_steps = 10000
     batch_size = 32
 
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
+    # Resize to 64x64
+    x_train_new = np.zeros((x_train.shape[0], 64, 64), dtype='int32')
+    for i, img in enumerate(x_train):
+        x_train_new[i] = cv2.resize(img, (64, 64), interpolation=cv2.INTER_CUBIC)
 
 
-    x_train = np.pad(x_train, ((0, 0), (18, 18), (18, 18)), mode='constant', constant_values=0)
+    x_train = x_train_new
+    del x_train_new
+
+    # Normalize to [-1, 1]
+    #x_train = np.pad(x_train, ((0, 0), (18, 18), (18, 18)), mode='constant', constant_values=0)
     x_train = np.expand_dims(x_train, -1)
     x_train = (x_train.astype('float32') - 127.5) / 127.5
     x_train = np.clip(x_train, -1., 1.)
@@ -40,12 +51,18 @@ def main():
 
     discriminator.compile('rmsprop', 'binary_crossentropy', ['accuracy'])
     discriminator.trainable = False
+
+    model = Model(vae.inputs, discriminator(vae.outputs), name='vaegan')
+    model.add_loss(vae_loss)
     model.compile('rmsprop', 'binary_crossentropy', ['accuracy'])
 
     import keras.callbacks as cbks
+    import os.path
 
     verbose = True
-    callbacks = [TensorBoard(batch_size=batch_size)]
+    checkpoint = cbks.ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
+
+    callbacks = [TensorBoard(batch_size=batch_size), checkpoint]
 
     epochs = 100
     steps_per_epoch = x_train.shape[0] // batch_size
@@ -115,6 +132,15 @@ def main():
             callbacks.on_batch_end(batch_index, batch_logs)
 
         callbacks.on_epoch_end(epoch, epoch_logs)
+
+    rand_indexes = np.random.randint(0, x_train.shape[0], size=1)
+    real_images = x_train[rand_indexes]
+
+    model.save_weights('trained.h5')
+
+    a = encoder.predict(real_images)
+    print(a)
+
 
 
 if __name__ == '__main__':
