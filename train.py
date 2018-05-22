@@ -490,7 +490,7 @@ def main():
 
 
     epochs = 10
-    steps_per_epoch = (x_train.shape[0]//10) // batch_size
+    steps_per_epoch = (x_train.shape[0]) // batch_size
 
     def disc_gen():
         half_batch = batch_size // 2
