@@ -10,7 +10,8 @@ from keras.layers import Input, Conv2D, BatchNormalization, Activation, Dense, C
 from .losses import mean_gaussian_negative_log_likelihood
 
 
-def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_gan_weight=1e-6):
+def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
+
     image_shape = (64, 64, 1)
     n_channels = image_shape[-1]
     n_encoder = 1024
@@ -19,12 +20,15 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     decode_from_shape = (8, 8, 256)
     n_decoder = np.prod(decode_from_shape)
 
-    def conv_block(x, filters, transpose=False):
+    leaky_relu_alpha = 0.2
+
+    def conv_block(x, filters, leaky=True, transpose=False):
         conv = Conv2DTranspose if transpose else Conv2D
+        activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
             conv(filters, 5, strides=2, padding='same'),
             BatchNormalization(),
-            LeakyReLU(0.2)
+            activation
         ]
         if x is None:
             return layers
@@ -35,9 +39,9 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     # Encoder
     x = Input(shape=image_shape, name='input_image')
 
-    y = conv_block(x, 64)
-    y = conv_block(y, 128)
-    y = conv_block(y, 256)
+    y = conv_block(x, 64, leaky=True)
+    y = conv_block(y, 128, leaky=True)
+    y = conv_block(y, 256, leaky=True)
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
@@ -58,7 +62,6 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
         # Returns:
             z (tensor): sampled latent vector
         """
-
         z_mean, z_log_var = args
         batch = K.shape(z_mean)[0]
         dim = K.int_shape(z_mean)[1]
@@ -72,7 +75,7 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     decoder = Sequential([
         Dense(n_decoder, input_shape=(latent_dim,)),
         BatchNormalization(),
-        LeakyReLU(0.2),
+        LeakyReLU(leaky_relu_alpha),
         Reshape(decode_from_shape),
         *conv_block(None, 256, transpose=True),
         *conv_block(None, 128, transpose=True),
@@ -83,64 +86,48 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     # Discriminator
     discriminator = Sequential([
         Conv2D(32, 5, padding='same', input_shape=image_shape),
-        LeakyReLU(0.2),
+        LeakyReLU(leaky_relu_alpha),
         *conv_block(None, 128),
         *conv_block(None, 256),
         *conv_block(None, 256),
         Flatten(),
         Dense(n_discriminator),
         BatchNormalization(),
-        LeakyReLU(0.2),
+        LeakyReLU(leaky_relu_alpha),
         Dense(1, activation='sigmoid')
     ], name='discriminator')
 
+    # discriminator model until lth layer
     discriminator_lth = Sequential(discriminator.layers[:recon_depth], name='discriminator_lth')
 
+    # Reconstructed output of VAE
+    x_tilde = decoder(sampler(encoder.outputs))
 
+    # Learned similarity metric
+    dis_lth_tilde = discriminator_lth(x_tilde)
+    dis_lth = discriminator_lth(x)
+    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_lth, dis_lth_tilde)
+
+    # KL divergence loss
     kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
     vae_loss = K.mean(kl_loss)
 
-
-
-    x_hat = decoder(sampler(encoder.outputs))
-
-    dis_lth_hat = discriminator_lth(x_hat)
-    dis_lth = discriminator_lth(x)
-
-    dist_like_loss = mean_gaussian_negative_log_likelihood(dis_lth, dis_lth_hat)
-
-    encoder_train = Model(x, [dis_lth, dis_lth_hat], name='encoder')
+    encoder_train = Model(x, [dis_lth, dis_lth_tilde], name='encoder')
     encoder_train.add_loss(vae_loss)
-    encoder_train.add_loss(dist_like_loss)
+    encoder_train.add_loss(dis_nll_loss)
 
-    # batch_size = 32
-    # mean = K.constant(0, dtype='float32', shape=(batch_size, latent_dim), name='mean')
-    # var = K.constant(1, dtype='float32', shape=(batch_size, latent_dim), name='variance')
-
+    # z_p is sampled directly from isotropic gaussian
     z_p = Input(shape=(latent_dim,), name='z_p')
     x_p = decoder(z_p)
 
-    dis_hat = discriminator(x_hat)
+    dis_tilde = discriminator(x_tilde)
     dis_p = discriminator(x_p)
 
-    decoder_train = Model([x, z_p], [dis_hat, dis_p], name='decoder')
-    decoder_train.add_loss(recon_vs_gan_weight * dist_like_loss)
+    decoder_train = Model([x, z_p], [dis_tilde, dis_p], name='decoder')
+    decoder_train.add_loss(recon_vs_gan_weight * dis_nll_loss)
 
+    vae = Model(x, x_tilde, name='vae')
 
-    vae = Model(x, x_hat, name='vae')
-    #
-    #
-    vaegan = Model(x, dis_hat, name='vaegan')
-    # vaegan.add_loss(vae_loss)
-
+    vaegan = Model(x, dis_tilde, name='vaegan')
 
     return encoder, decoder, discriminator, encoder_train, decoder_train, vae, vaegan
-
-
-# from keras.utils.vis_utils import plot_model
-# e, d, dis, vae, gan = create_models()
-# plot_model(e, show_shapes=True, to_file='encoder.png')
-# plot_model(d, show_shapes=True, to_file='decoder.png')
-# plot_model(dis, show_shapes=True, to_file='discriminator.png')
-# plot_model(vae, show_shapes=True, to_file='vae.png')
-# plot_model(gan, show_shapes=True, to_file=' gan.png')
