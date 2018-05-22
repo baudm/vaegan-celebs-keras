@@ -5,7 +5,7 @@ import numpy as np
 from keras import backend as K
 from keras.models import Sequential, Model
 from keras.layers import Input, Conv2D, BatchNormalization, Activation, Dense, Conv2DTranspose, Flatten, Reshape, \
-    Lambda
+    Lambda, LeakyReLU
 
 from .losses import mean_gaussian_negative_log_likelihood
 
@@ -24,7 +24,7 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
         layers = [
             conv(filters, 5, strides=2, padding='same'),
             BatchNormalization(),
-            Activation('relu')
+            LeakyReLU(0.2)
         ]
         if x is None:
             return layers
@@ -41,7 +41,7 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = Activation('relu')(y)
+    y = LeakyReLU(0.2)(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)
@@ -72,7 +72,7 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     decoder = Sequential([
         Dense(n_decoder, input_shape=(latent_dim,)),
         BatchNormalization(),
-        Activation('relu'),
+        LeakyReLU(0.2),
         Reshape(decode_from_shape),
         *conv_block(None, 256, transpose=True),
         *conv_block(None, 128, transpose=True),
@@ -83,14 +83,14 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6, recon_depth=9, recon_vs_
     # Discriminator
     discriminator = Sequential([
         Conv2D(32, 5, padding='same', input_shape=image_shape),
-        Activation('relu'),
+        LeakyReLU(0.2),
         *conv_block(None, 128),
         *conv_block(None, 256),
         *conv_block(None, 256),
         Flatten(),
         Dense(n_discriminator),
         BatchNormalization(),
-        Activation('relu'),
+        LeakyReLU(0.2),
         Dense(1, activation='sigmoid')
     ], name='discriminator')
 
