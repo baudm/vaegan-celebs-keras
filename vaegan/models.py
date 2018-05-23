@@ -4,7 +4,7 @@ import numpy as np
 
 from keras import backend as K
 from keras.models import Sequential, Model
-from keras.layers import Input, Conv2D, BatchNormalization, Activation, Dense, Conv2DTranspose, Flatten, Reshape, \
+from keras.layers import Input, Conv2D, BatchNormalization, Dense, Conv2DTranspose, Flatten, Reshape, \
     Lambda, LeakyReLU
 
 from .losses import mean_gaussian_negative_log_likelihood
@@ -22,13 +22,12 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
 
     leaky_relu_alpha = 0.2
 
-    def conv_block(x, filters, leaky=True, transpose=False):
+    def conv_block(x, filters, transpose=False):
         conv = Conv2DTranspose if transpose else Conv2D
-        activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
             conv(filters, 5, strides=2, padding='same'),
             BatchNormalization(),
-            activation
+            LeakyReLU(leaky_relu_alpha)
         ]
         if x is None:
             return layers
@@ -39,13 +38,13 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     # Encoder
     x = Input(shape=image_shape, name='input_image')
 
-    y = conv_block(x, 64, leaky=True)
-    y = conv_block(y, 128, leaky=True)
-    y = conv_block(y, 256, leaky=True)
+    y = conv_block(x, 64)
+    y = conv_block(y, 128)
+    y = conv_block(y, 256)
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = LeakyReLU(0.2)(y)
+    y = LeakyReLU(leaky_relu_alpha)(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)
@@ -124,7 +123,8 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     dis_p = discriminator(x_p)
 
     decoder_train = Model([x, z_p], [dis_tilde, dis_p], name='decoder')
-    decoder_train.add_loss(recon_vs_gan_weight * dis_nll_loss)
+    normalized_weight = recon_vs_gan_weight / (1. - recon_vs_gan_weight)
+    decoder_train.add_loss(normalized_weight * dis_nll_loss)
 
     vae = Model(x, x_tilde, name='vae')
 
