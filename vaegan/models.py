@@ -39,13 +39,13 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     # Encoder
     x = Input(shape=image_shape, name='input_image')
 
-    y = conv_block(x, 64)
-    y = conv_block(y, 128)
-    y = conv_block(y, 256)
+    y = conv_block(x, 64, leaky=False)
+    y = conv_block(y, 128, leaky=False)
+    y = conv_block(y, 256, leaky=False)
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = LeakyReLU(leaky_relu_alpha)(y)
+    y = Activation('relu')(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)
@@ -98,7 +98,7 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     ], name='discriminator')
 
     # discriminator model until lth layer
-    discriminator_features = Sequential(discriminator.layers[:feature_match_depth], name='discriminator_lth')
+    discriminator_features = Sequential(discriminator.layers[:feature_match_depth], name='discriminator_features')
 
     # Reconstructed output of VAE
     x_tilde = decoder(sampler(encoder.outputs))
