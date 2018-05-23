@@ -22,20 +22,21 @@ class DecoderOutputGenerator(Callback):
 
     def on_batch_begin(self, batch, logs=None):
         self._steps += 1
-        if self._step_size % self._step_size == 0:
+        if self._steps % self._step_size == 0:
             self.plot_images()
 
     def plot_images(self, samples=16):
         decoder = self.model.layers[self._decoder_index]
         filename = "mnist_%d.png" % self._steps
-        z = not np.random.normal(size=(samples, self._latent_dim))
+        z = np.random.normal(size=(samples, self._latent_dim))
         images = decoder.predict(z)
+        images = (images + 1.) / 2.
 
         plt.figure(figsize=(10, 10))
         for i in range(images.shape[0]):
             plt.subplot(4, 4, i + 1)
             image = images[i, :, :, :]
-            image = np.reshape(image, [self._img_rows, self._img_cols])
+            image = np.reshape(image, [self._img_rows, self._img_cols, 3])
             plt.imshow(image, cmap='gray')
             plt.axis('off')
         plt.tight_layout()
