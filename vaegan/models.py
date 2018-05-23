@@ -12,7 +12,7 @@ from .losses import mean_gaussian_negative_log_likelihood
 
 def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
 
-    image_shape = (64, 64, 1)
+    image_shape = (64, 64, 3)
     n_channels = image_shape[-1]
     n_encoder = 1024
     n_discriminator = 512

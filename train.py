@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 
 import matplotlib.pyplot as plt
 
@@ -14,6 +15,14 @@ from vaegan.data import image_loader, encoder_loader, decoder_loader, discrimina
 
 def main():
     encoder, decoder, discriminator, encoder_train, decoder_train, vae, vaegan = create_models()
+
+    vaegan.summary()
+
+    if len(sys.argv) == 3:
+        vaegan.load_weights(sys.argv[1])
+        initial_epoch = int(sys.argv[2])
+    else:
+        initial_epoch = 0
 
     batch_size = 64
 
@@ -50,7 +59,7 @@ def main():
     fit_models(vaegan, [discriminator, decoder_train, encoder_train], [dis_loader, dec_loader, enc_loader],
                [{'di_loss': 0, 'di_acc': 1}, {'de_loss': 0, 'de_acc': 3, 'de_acc_p': 5}, {'en_loss': 0}],
                batch_size,
-               steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs
+               steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch
                )
 
     vaegan.save_weights('trained.h5')
