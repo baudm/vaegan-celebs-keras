@@ -17,8 +17,8 @@ class DecoderOutputGenerator(Callback):
         self._img_rows = 64
         self._img_cols = 64
 
-    def on_epoch_begin(self, epoch, logs=None):
-        self._steps = 0
+    # def on_epoch_begin(self, epoch, logs=None):
+    #     self._steps = 0
 
     def on_batch_begin(self, batch, logs=None):
         self._steps += 1
