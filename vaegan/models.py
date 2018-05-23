@@ -5,12 +5,12 @@ import numpy as np
 from keras import backend as K
 from keras.models import Sequential, Model
 from keras.layers import Input, Conv2D, BatchNormalization, Dense, Conv2DTranspose, Flatten, Reshape, \
-    Lambda, LeakyReLU
+    Lambda, LeakyReLU, Activation
 
 from .losses import mean_gaussian_negative_log_likelihood
 
 
-def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
+def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
 
     image_shape = (64, 64, 3)
     n_channels = image_shape[-1]
@@ -22,12 +22,13 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
 
     leaky_relu_alpha = 0.2
 
-    def conv_block(x, filters, transpose=False):
+    def conv_block(x, filters, leaky=False, transpose=False):
         conv = Conv2DTranspose if transpose else Conv2D
+        activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
             conv(filters, 5, strides=2, padding='same'),
             BatchNormalization(),
-            LeakyReLU(leaky_relu_alpha)
+            activation
         ]
         if x is None:
             return layers
@@ -44,7 +45,7 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = LeakyReLU(leaky_relu_alpha)(y)
+    y = Activation('relu')(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)
@@ -74,7 +75,7 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     decoder = Sequential([
         Dense(n_decoder, input_shape=(latent_dim,)),
         BatchNormalization(),
-        LeakyReLU(leaky_relu_alpha),
+        Activation('relu'),
         Reshape(decode_from_shape),
         *conv_block(None, 256, transpose=True),
         *conv_block(None, 128, transpose=True),
@@ -86,9 +87,9 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     discriminator = Sequential([
         Conv2D(32, 5, padding='same', input_shape=image_shape),
         LeakyReLU(leaky_relu_alpha),
-        *conv_block(None, 128),
-        *conv_block(None, 256),
-        *conv_block(None, 256),
+        *conv_block(None, 128, leaky=True),
+        *conv_block(None, 256, leaky=True),
+        *conv_block(None, 256, leaky=True),
         Flatten(),
         Dense(n_discriminator),
         BatchNormalization(),
@@ -97,21 +98,21 @@ def create_models(recon_depth=9, recon_vs_gan_weight=1e-6):
     ], name='discriminator')
 
     # discriminator model until lth layer
-    discriminator_lth = Sequential(discriminator.layers[:recon_depth], name='discriminator_lth')
+    discriminator_features = Sequential(discriminator.layers[:feature_match_depth], name='discriminator_lth')
 
     # Reconstructed output of VAE
     x_tilde = decoder(sampler(encoder.outputs))
 
     # Learned similarity metric
-    dis_lth_tilde = discriminator_lth(x_tilde)
-    dis_lth = discriminator_lth(x)
-    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_lth, dis_lth_tilde)
+    dis_feat_tilde = discriminator_features(x_tilde)
+    dis_feat = discriminator_features(x)
+    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_feat, dis_feat_tilde)
 
     # KL divergence loss
     kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
     vae_loss = K.mean(kl_loss)
 
-    encoder_train = Model(x, [dis_lth, dis_lth_tilde], name='encoder')
+    encoder_train = Model(x, [dis_feat, dis_feat_tilde], name='encoder')
     encoder_train.add_loss(vae_loss)
     encoder_train.add_loss(dis_nll_loss)
 

@@ -10,7 +10,7 @@ from keras.optimizers import RMSprop
 
 from vaegan.models import create_models
 from vaegan.training import fit_models
-from vaegan.data import image_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES
+from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
 from vaegan.callbacks import DecoderOutputGenerator
 
 
@@ -52,7 +52,7 @@ def main():
 
     steps_per_epoch = NUM_SAMPLES // batch_size
 
-    img_loader = image_loader(batch_size)
+    img_loader = celeba_loader(batch_size)
     dis_loader = discriminator_loader(vae, decoder, img_loader)
     dec_loader = decoder_loader(img_loader)
     enc_loader = encoder_loader(img_loader)
@@ -66,7 +66,7 @@ def main():
 
     vaegan.save_weights('trained.h5')
 
-    x = next(image_loader(1))
+    x = next(celeba_loader(1))
 
     x_tilde = vae.predict(x)
 
