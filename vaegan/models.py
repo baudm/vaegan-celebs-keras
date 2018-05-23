@@ -22,7 +22,7 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
 
     leaky_relu_alpha = 0.2
 
-    def conv_block(x, filters, leaky=False, transpose=False):
+    def conv_block(x, filters, leaky=True, transpose=False):
         conv = Conv2DTranspose if transpose else Conv2D
         activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
@@ -45,7 +45,7 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = Activation('relu')(y)
+    y = LeakyReLU(leaky_relu_alpha)(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)
@@ -75,7 +75,7 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     decoder = Sequential([
         Dense(n_decoder, input_shape=(latent_dim,)),
         BatchNormalization(),
-        Activation('relu'),
+        LeakyReLU(leaky_relu_alpha),
         Reshape(decode_from_shape),
         *conv_block(None, 256, transpose=True),
         *conv_block(None, 128, transpose=True),
