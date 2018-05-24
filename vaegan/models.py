@@ -6,11 +6,12 @@ from keras import backend as K
 from keras.models import Sequential, Model
 from keras.layers import Input, Conv2D, BatchNormalization, Dense, Conv2DTranspose, Flatten, Reshape, \
     Lambda, LeakyReLU, Activation
+from keras.regularizers import l2
 
 from .losses import mean_gaussian_negative_log_likelihood
 
 
-def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
+def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
 
     image_shape = (64, 64, 3)
     n_channels = image_shape[-1]
@@ -26,8 +27,8 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
         conv = Conv2DTranspose if transpose else Conv2D
         activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
-            conv(filters, 5, strides=2, padding='same'),
-            BatchNormalization(),
+            conv(filters, 5, strides=2, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform'),
+            BatchNormalization(momentum=bn_mom, epsilon=bn_eps),
             activation
         ]
         if x is None:
@@ -43,12 +44,12 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     y = conv_block(y, 128)
     y = conv_block(y, 256)
     y = Flatten()(y)
-    y = Dense(n_encoder)(y)
+    y = Dense(n_encoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(y)
     y = BatchNormalization()(y)
     y = LeakyReLU(leaky_relu_alpha)(y)
 
-    z_mean = Dense(latent_dim, name='z_mean')(y)
-    z_log_var = Dense(latent_dim, name='z_log_var')(y)
+    z_mean = Dense(latent_dim, name='z_mean', kernel_initializer='he_uniform')(y)
+    z_log_var = Dense(latent_dim, name='z_log_var', kernel_initializer='he_uniform')(y)
 
     encoder = Model(x, [z_mean, z_log_var], name='encoder')
 
@@ -73,34 +74,35 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
 
     # Decoder
     decoder = Sequential([
-        Dense(n_decoder, input_shape=(latent_dim,)),
+        Dense(n_decoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', input_shape=(latent_dim,)),
         BatchNormalization(),
         LeakyReLU(leaky_relu_alpha),
         Reshape(decode_from_shape),
         *conv_block(None, 256, transpose=True),
         *conv_block(None, 128, transpose=True),
         *conv_block(None, 32, transpose=True),
-        Conv2D(n_channels, 5, activation='tanh', padding='same', name='output_image')
+        Conv2D(n_channels, 5, activation='tanh', padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='output_image')
     ], name='decoder')
 
-    # Discriminator
+    # Discriminator features at the 9th layer
     discriminator_features = Sequential([
-        Conv2D(32, 5, padding='same', input_shape=image_shape),
+        Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', input_shape=image_shape),
         LeakyReLU(leaky_relu_alpha),
         *conv_block(None, 128, leaky=True),
         *conv_block(None, 256, leaky=True),
         conv_block(None, 256, leaky=True)[0]
     ], name='discriminator_features')
 
+    # Complete discriminator model
     dis_input = Input(shape=image_shape, name='discriminator_input')
     d = discriminator_features(dis_input)
     d = BatchNormalization()(d)
     d = LeakyReLU(leaky_relu_alpha)(d)
     d = Flatten()(d)
-    d = Dense(n_discriminator)(d)
+    d = Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
     d = BatchNormalization()(d)
     d = LeakyReLU(leaky_relu_alpha)(d)
-    d = Dense(1, activation='sigmoid')(d)
+    d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
 
     discriminator = Model(dis_input, d, name='discriminator')
 
