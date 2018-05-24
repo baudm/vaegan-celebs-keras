@@ -27,7 +27,7 @@ class DecoderOutputGenerator(Callback):
 
     def plot_images(self, samples=16):
         decoder = self.model.layers[self._decoder_index]
-        filename = "mnist_%d.png" % self._steps
+        filename = "generated_%d.png" % self._steps
         z = np.random.normal(size=(samples, self._latent_dim))
         images = decoder.predict(z)
         images = (images + 1.) / 2.
@@ -41,4 +41,3 @@ class DecoderOutputGenerator(Callback):
             plt.axis('off')
         plt.tight_layout()
         plt.savefig(filename)
-        plt.close('all')
