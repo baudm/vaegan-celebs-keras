@@ -39,13 +39,13 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     # Encoder
     x = Input(shape=image_shape, name='input_image')
 
-    y = conv_block(x, 64, leaky=False)
-    y = conv_block(y, 128, leaky=False)
-    y = conv_block(y, 256, leaky=False)
+    y = conv_block(x, 64)
+    y = conv_block(y, 128)
+    y = conv_block(y, 256)
     y = Flatten()(y)
     y = Dense(n_encoder)(y)
     y = BatchNormalization()(y)
-    y = Activation('relu')(y)
+    y = LeakyReLU(leaky_relu_alpha)(y)
 
     z_mean = Dense(latent_dim, name='z_mean')(y)
     z_log_var = Dense(latent_dim, name='z_log_var')(y)

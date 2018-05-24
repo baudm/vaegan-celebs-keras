@@ -46,7 +46,7 @@ def main():
     checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
     decoder_sampler = DecoderOutputGenerator()
 
-    callbacks = [checkpoint, decoder_sampler]
+    callbacks = [checkpoint, decoder_sampler, TensorBoard()]
 
     epochs = 100
 
