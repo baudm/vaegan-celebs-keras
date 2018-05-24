@@ -84,21 +84,25 @@ def create_models(feature_match_depth=9, recon_vs_gan_weight=1e-6):
     ], name='decoder')
 
     # Discriminator
-    discriminator = Sequential([
+    discriminator_features = Sequential([
         Conv2D(32, 5, padding='same', input_shape=image_shape),
         LeakyReLU(leaky_relu_alpha),
         *conv_block(None, 128, leaky=True),
         *conv_block(None, 256, leaky=True),
-        *conv_block(None, 256, leaky=True),
-        Flatten(),
-        Dense(n_discriminator),
-        BatchNormalization(),
-        LeakyReLU(leaky_relu_alpha),
-        Dense(1, activation='sigmoid')
-    ], name='discriminator')
+        conv_block(None, 256, leaky=True)[0]
+    ], name='discriminator_features')
 
-    # discriminator model until lth layer
-    discriminator_features = Sequential(discriminator.layers[:feature_match_depth], name='discriminator_features')
+    dis_input = Input(shape=image_shape, name='discriminator_input')
+    d = discriminator_features(dis_input)
+    d = BatchNormalization()(d)
+    d = LeakyReLU(leaky_relu_alpha)(d)
+    d = Flatten()(d)
+    d = Dense(n_discriminator)(d)
+    d = BatchNormalization()(d)
+    d = LeakyReLU(leaky_relu_alpha)(d)
+    d = Dense(1, activation='sigmoid')(d)
+
+    discriminator = Model(dis_input, d, name='discriminator')
 
     # Reconstructed output of VAE
     x_tilde = decoder(sampler(encoder.outputs))
