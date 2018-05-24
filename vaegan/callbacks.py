@@ -32,7 +32,7 @@ class DecoderOutputGenerator(Callback):
         images = decoder.predict(z)
         images = (images + 1.) / 2.
 
-        plt.figure(figsize=(10, 10))
+        fig = plt.figure(figsize=(10, 10))
         for i in range(images.shape[0]):
             plt.subplot(4, 4, i + 1)
             image = images[i, :, :, :]
@@ -41,3 +41,4 @@ class DecoderOutputGenerator(Callback):
             plt.axis('off')
         plt.tight_layout()
         plt.savefig(filename)
+        plt.close(fig)
