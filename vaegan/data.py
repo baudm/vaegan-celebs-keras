@@ -2,7 +2,7 @@
 
 import os.path
 import glob
-from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool as Pool
 
 import numpy as np
 from PIL import Image
