@@ -95,7 +95,7 @@ def discriminator_loader_fake(vae, decoder, img_loader, latent_dim=128, seed=0):
         z_p = rng.normal(size=(half_batch, latent_dim))
         x_p = decoder.predict(z_p)
         inputs = np.concatenate([x_tilde, x_p])
-        y = np.zeros([batch_size, 1], dtype='float32')
+        y = np.zeros([2 * half_batch, 1], dtype='float32')
 
         yield inputs, y
 
