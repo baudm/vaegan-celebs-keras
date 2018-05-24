@@ -41,4 +41,8 @@ class DecoderOutputGenerator(Callback):
             plt.axis('off')
         plt.tight_layout()
         plt.savefig(filename)
-        plt.close(fig)
+        try:
+            plt.close(fig)
+        except: # FIXME
+            # HACK
+            pass
