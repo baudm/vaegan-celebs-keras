@@ -10,7 +10,7 @@ from keras.optimizers import RMSprop
 
 from vaegan.models import create_models
 from vaegan.training import fit_models
-from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
+from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, discriminator_loader_fake, NUM_SAMPLES, mnist_loader
 from vaegan.callbacks import DecoderOutputGenerator
 
 
@@ -53,16 +53,17 @@ def main():
     steps_per_epoch = NUM_SAMPLES // batch_size
 
     img_loader = celeba_loader(batch_size)
-    dis_loader = discriminator_loader(vae, decoder, img_loader)
+    dis_loader = discriminator_loader(img_loader)
+    dis_loader_f = discriminator_loader_fake(vae, decoder, img_loader)
     dec_loader = decoder_loader(img_loader)
     enc_loader = encoder_loader(img_loader)
 
+    models = [discriminator, discriminator, decoder_train, encoder_train]
+    generators = [dis_loader, dis_loader_f, dec_loader, enc_loader]
+    metrics = [{'di_loss': 0, 'di_acc': 1}, {'di_loss_f': 0, 'di_acc_f': 1}, {'de_loss': 0, 'de_acc': 3, 'de_acc_p': 5}, {'en_loss': 0}]
 
-    fit_models(vaegan, [discriminator, decoder_train, encoder_train], [dis_loader, dec_loader, enc_loader],
-               [{'di_loss': 0, 'di_acc': 1}, {'de_loss': 0, 'de_acc': 3, 'de_acc_p': 5}, {'en_loss': 0}],
-               batch_size,
-               steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch
-               )
+    fit_models(vaegan, models, generators, metrics, batch_size,
+               steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch)
 
     vaegan.save_weights('trained.h5')
 
