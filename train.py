@@ -4,6 +4,7 @@ import os
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.optimizers import RMSprop
@@ -22,8 +23,6 @@ def set_t(m, t):
 def main():
     encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan = create_models()
 
-
-
     if len(sys.argv) == 3:
         vaegan.load_weights(sys.argv[1])
         initial_epoch = int(sys.argv[2])
@@ -36,23 +35,20 @@ def main():
 
     set_t(encoder, False)
     set_t(decoder, False)
-    discriminator_train.name = 'di'
     discriminator_train.compile(rmsprop, ['binary_crossentropy'] * 3, ['acc'] * 3)
     discriminator_train.summary()
 
     set_t(discriminator, False)
     set_t(decoder, True)
-    decoder_train.name = 'de'
     decoder_train.compile(rmsprop, ['binary_crossentropy'] * 2, ['acc'] * 2)
     decoder_train.summary()
 
     set_t(decoder, False)
     set_t(encoder, True)
-    encoder_train.name = 'e'
     encoder_train.compile(rmsprop)
     encoder_train.summary()
 
-    vaegan.summary()
+    set_t(vaegan, True)
 
     checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
     decoder_sampler = DecoderOutputGenerator()
@@ -63,9 +59,11 @@ def main():
 
     steps_per_epoch = NUM_SAMPLES // batch_size
 
-    img_loader = celeba_loader(batch_size, num_child=3)
-    dis_loader = discriminator_loader(img_loader)
-    dec_loader = decoder_loader(img_loader)
+    seed = np.random.randint(2**32 - 1)
+
+    img_loader = celeba_loader(batch_size, num_child=3, seed=seed)
+    dis_loader = discriminator_loader(img_loader, seed=seed)
+    dec_loader = decoder_loader(img_loader, seed=seed)
     enc_loader = encoder_loader(img_loader)
 
     models = [discriminator_train, decoder_train, encoder_train]
@@ -82,10 +80,10 @@ def main():
     x_tilde = vae.predict(x)
 
     plt.subplot(211)
-    plt.imshow((x[0].squeeze() + 1.) / 2., cmap='gray')
+    plt.imshow((x[0].squeeze() + 1.) / 2.)
 
     plt.subplot(212)
-    plt.imshow((x_tilde[0].squeeze() + 1.) / 2., cmap='gray')
+    plt.imshow((x_tilde[0].squeeze() + 1.) / 2.)
 
     plt.show()
 

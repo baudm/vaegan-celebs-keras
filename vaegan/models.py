@@ -38,20 +38,21 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         return x
 
     # Encoder
-    x = Input(shape=image_shape, name='input_image')
+    def create_encoder():
+        enc_input = Input(shape=image_shape, name='input_image')
 
-    y = conv_block(x, 64)
-    y = conv_block(y, 128)
-    y = conv_block(y, 256)
-    y = Flatten()(y)
-    y = Dense(n_encoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(y)
-    y = BatchNormalization()(y)
-    y = LeakyReLU(leaky_relu_alpha)(y)
+        y = conv_block(enc_input, 64)
+        y = conv_block(y, 128)
+        y = conv_block(y, 256)
+        y = Flatten()(y)
+        y = Dense(n_encoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(y)
+        y = BatchNormalization()(y)
+        y = LeakyReLU(leaky_relu_alpha)(y)
 
-    z_mean = Dense(latent_dim, name='z_mean', kernel_initializer='he_uniform')(y)
-    z_log_var = Dense(latent_dim, name='z_log_var', kernel_initializer='he_uniform')(y)
+        z_mean = Dense(latent_dim, name='z_mean', kernel_initializer='he_uniform')(y)
+        z_log_var = Dense(latent_dim, name='z_log_var', kernel_initializer='he_uniform')(y)
 
-    encoder = Model(x, [z_mean, z_log_var], name='encoder')
+        return Model(enc_input, [z_mean, z_log_var], name='encoder')
 
     # reparameterization trick
     # instead of sampling from Q(z|X), sample eps = N(0,I)
@@ -70,7 +71,7 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         epsilon = K.random_normal(shape=(batch, dim))
         return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
-    sampler = Lambda(sampling, output_shape=(latent_dim,))
+    sampler = Lambda(sampling, output_shape=(latent_dim,), name='sampler')
 
     # Decoder
     decoder = Sequential([
@@ -84,54 +85,66 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         Conv2D(n_channels, 5, activation='tanh', padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='output_image')
     ], name='decoder')
 
-    # Complete discriminator model
-    dis_input = Input(shape=image_shape, name='discriminator_input')
+    # Discriminator
+    def create_discriminator():
+        dis_input = Input(shape=image_shape, name='discriminator_input')
 
-    d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input)
-    d = LeakyReLU(leaky_relu_alpha)(d)
-    d = conv_block(d, 128, leaky=True)
-    d = conv_block(d, 256, leaky=True)
-    d_feat = conv_block(None, 256, leaky=True)[0](d)
-    d = BatchNormalization(momentum=bn_mom, epsilon=bn_eps)(d_feat)
-    d = LeakyReLU(leaky_relu_alpha)(d)
-    d = Flatten()(d)
-    d = Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
-    d = BatchNormalization()(d)
-    d = LeakyReLU(leaky_relu_alpha)(d)
-    d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
+        d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input)
+        d = LeakyReLU(leaky_relu_alpha)(d)
+        d = conv_block(d, 128, leaky=True)
+        d = conv_block(d, 256, leaky=True)
+        d_feat = conv_block(None, 256, leaky=True)[0](d)
+        d = BatchNormalization(momentum=bn_mom, epsilon=bn_eps)(d_feat)
+        d = LeakyReLU(leaky_relu_alpha)(d)
+        d = Flatten()(d)
+        d = Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
+        d = BatchNormalization()(d)
+        d = LeakyReLU(leaky_relu_alpha)(d)
+        d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
 
-    discriminator = Model(dis_input, [d, d_feat], name='discriminator')
+        return Model(dis_input, [d, d_feat], name='discriminator')
 
-    # KL divergence loss
-    kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-    vae_loss = K.mean(kl_loss)
+    encoder = create_encoder()
+    discriminator = create_discriminator()
 
-    # Reconstructed output of VAE
-    x_tilde = decoder(sampler(encoder.outputs))
-
+    # Inputs
+    x = Input(shape=image_shape, name='input_image')
     # z_p is sampled directly from isotropic gaussian
     z_p = Input(shape=(latent_dim,), name='z_p')
+
+    # Build computational graph
+
+    z_mean, z_log_var = encoder(x)
+    z = sampler([z_mean, z_log_var])
+
+    x_tilde = decoder(z)
     x_p = decoder(z_p)
 
     dis_x = discriminator(x)
     dis_x_tilde = discriminator(x_tilde)
     dis_x_p = discriminator(x_p)
 
+    # Compute losses
+
     # Learned similarity metric
     dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_x[1], dis_x_tilde[1])
 
-    encoder_train = Model(x, [dis_x[1], dis_x_tilde[1]], name='encoder')
-    encoder_train.add_loss(vae_loss)
+    # KL divergence loss
+    kl_loss = K.mean(-0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1))
+
+    # Create models for training
+    encoder_train = Model(x, dis_x_tilde[1], name='e')
+    encoder_train.add_loss(kl_loss)
     encoder_train.add_loss(dis_nll_loss)
 
-    decoder_train = Model([x, z_p], [dis_x_tilde[0], dis_x_p[0]], name='decoder')
+    decoder_train = Model([x, z_p], [dis_x_tilde[0], dis_x_p[0]], name='de')
     normalized_weight = recon_vs_gan_weight / (1. - recon_vs_gan_weight)
     decoder_train.add_loss(normalized_weight * dis_nll_loss)
 
-    discriminator_train = Model([x, z_p], [dis_x[0], dis_x_tilde[0], dis_x_p[0]], name='discriminator')
+    discriminator_train = Model([x, z_p], [dis_x[0], dis_x_tilde[0], dis_x_p[0]], name='di')
 
+    # Additional models for testing
     vae = Model(x, x_tilde, name='vae')
-
     vaegan = Model(x, dis_x_tilde[0], name='vaegan')
 
     return encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan
