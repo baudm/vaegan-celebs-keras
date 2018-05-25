@@ -9,19 +9,21 @@ import numpy as np
 from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.optimizers import RMSprop
 
-from vaegan.models import create_models
+from vaegan.models import create_base_models, create_train_and_test_models
 from vaegan.training import fit_models
 from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
 from vaegan.callbacks import DecoderOutputGenerator
 
 
-def set_t(m, t):
-    m.trainable = t
-    for l in m.layers:
-        l.trainable = t
+def set_trainable(model, trainable):
+    model.trainable = trainable
+    for layer in model.layers:
+        layer.trainable = trainable
+
 
 def main():
-    encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan = create_models()
+    encoder, decoder, discriminator = create_base_models()
+    encoder_train, decoder_train, discriminator_train, vae, vaegan = create_train_and_test_models(encoder, decoder, discriminator)
 
     if len(sys.argv) == 3:
         vaegan.load_weights(sys.argv[1])
@@ -33,22 +35,22 @@ def main():
 
     rmsprop = RMSprop(lr=0.0003)
 
-    set_t(encoder, False)
-    set_t(decoder, False)
+    set_trainable(encoder, False)
+    set_trainable(decoder, False)
     discriminator_train.compile(rmsprop, ['binary_crossentropy'] * 3, ['acc'] * 3)
     discriminator_train.summary()
 
-    set_t(discriminator, False)
-    set_t(decoder, True)
+    set_trainable(discriminator, False)
+    set_trainable(decoder, True)
     decoder_train.compile(rmsprop, ['binary_crossentropy'] * 2, ['acc'] * 2)
     decoder_train.summary()
 
-    set_t(decoder, False)
-    set_t(encoder, True)
+    set_trainable(decoder, False)
+    set_trainable(encoder, True)
     encoder_train.compile(rmsprop)
     encoder_train.summary()
 
-    set_t(vaegan, True)
+    set_trainable(vaegan, True)
 
     checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
     decoder_sampler = DecoderOutputGenerator()
@@ -70,8 +72,9 @@ def main():
     generators = [dis_loader, dec_loader, enc_loader]
     metrics = [{'di_l': 1, 'di_l_t': 2, 'di_l_p': 3, 'di_a': 4, 'di_a_t': 7, 'di_a_p': 10}, {'de_l_t': 1, 'de_l_p': 2, 'de_a_t': 3, 'de_a_p': 5}, {'en_l': 0}]
 
-    fit_models(vaegan, models, generators, metrics, batch_size,
-               steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch)
+    histories = fit_models(vaegan, models, generators, metrics, batch_size,
+                           steps_per_epoch=steps_per_epoch, callbacks=callbacks,
+                           epochs=epochs, initial_epoch=initial_epoch)
 
     vaegan.save_weights('trained.h5')
 

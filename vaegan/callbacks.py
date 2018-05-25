@@ -36,7 +36,7 @@ class DecoderOutputGenerator(Callback):
         for i in range(images.shape[0]):
             plt.subplot(4, 4, i + 1)
             image = images[i, :, :, :]
-            image = np.reshape(image, [self._img_rows, self._img_cols, 3])
+            image = np.reshape(image, [self._img_rows, self._img_cols, -1])
             plt.imshow(image, cmap='gray')
             plt.axis('off')
         plt.tight_layout()

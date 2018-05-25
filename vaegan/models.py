@@ -11,7 +11,7 @@ from keras.regularizers import l2
 from .losses import mean_gaussian_negative_log_likelihood
 
 
-def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
+def create_base_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
 
     image_shape = (64, 64, 3)
     n_channels = image_shape[-1]
@@ -20,7 +20,6 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
     latent_dim = 128
     decode_from_shape = (8, 8, 256)
     n_decoder = np.prod(decode_from_shape)
-
     leaky_relu_alpha = 0.2
 
     def conv_block(x, filters, leaky=True, transpose=False):
@@ -39,9 +38,9 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
 
     # Encoder
     def create_encoder():
-        enc_input = Input(shape=image_shape, name='input_image')
+        x = Input(shape=image_shape, name='input_image')
 
-        y = conv_block(enc_input, 64)
+        y = conv_block(x, 64)
         y = conv_block(y, 128)
         y = conv_block(y, 256)
         y = Flatten()(y)
@@ -52,26 +51,7 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         z_mean = Dense(latent_dim, name='z_mean', kernel_initializer='he_uniform')(y)
         z_log_var = Dense(latent_dim, name='z_log_var', kernel_initializer='he_uniform')(y)
 
-        return Model(enc_input, [z_mean, z_log_var], name='encoder')
-
-    # reparameterization trick
-    # instead of sampling from Q(z|X), sample eps = N(0,I)
-    # z = z_mean + sqrt(var)*eps
-    def sampling(args):
-        """Reparameterization trick by sampling fr an isotropic unit Gaussian.
-        # Arguments:
-            args (tensor): mean and log of variance of Q(z|X)
-        # Returns:
-            z (tensor): sampled latent vector
-        """
-        z_mean, z_log_var = args
-        batch = K.shape(z_mean)[0]
-        dim = K.int_shape(z_mean)[1]
-        # by default, random_normal has mean=0 and std=1.0
-        epsilon = K.random_normal(shape=(batch, dim))
-        return z_mean + K.exp(0.5 * z_log_var) * epsilon
-
-    sampler = Lambda(sampling, output_shape=(latent_dim,), name='sampler')
+        return Model(x, [z_mean, z_log_var], name='encoder')
 
     # Decoder
     decoder = Sequential([
@@ -87,9 +67,9 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
 
     # Discriminator
     def create_discriminator():
-        dis_input = Input(shape=image_shape, name='discriminator_input')
+        x = Input(shape=image_shape, name='discriminator_input')
 
-        d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input)
+        d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(x)
         d = LeakyReLU(leaky_relu_alpha)(d)
         d = conv_block(d, 128, leaky=True)
         d = conv_block(d, 256, leaky=True)
@@ -102,15 +82,41 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         d = LeakyReLU(leaky_relu_alpha)(d)
         d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
 
-        return Model(dis_input, [d, d_feat], name='discriminator')
+        return Model(x, [d, d_feat], name='discriminator')
 
     encoder = create_encoder()
     discriminator = create_discriminator()
 
+    return encoder, decoder, discriminator
+
+
+def _sampling(args):
+    """Reparameterization trick by sampling fr an isotropic unit Gaussian.
+       Instead of sampling from Q(z|X), sample eps = N(0,I)
+
+    # Arguments:
+        args (tensor): mean and log of variance of Q(z|X)
+    # Returns:
+        z (tensor): sampled latent vector
+    """
+    z_mean, z_log_var = args
+    batch = K.shape(z_mean)[0]
+    dim = K.int_shape(z_mean)[1]
+    # by default, random_normal has mean=0 and std=1.0
+    epsilon = K.random_normal(shape=(batch, dim))
+    return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+
+def create_train_and_test_models(encoder, decoder, discriminator, recon_vs_gan_weight=1e-6):
+    image_shape = K.int_shape(encoder.input)[1:]
+    latent_shape = K.int_shape(decoder.input)[1:]
+
+    sampler = Lambda(_sampling, output_shape=latent_shape, name='sampler')
+
     # Inputs
     x = Input(shape=image_shape, name='input_image')
     # z_p is sampled directly from isotropic gaussian
-    z_p = Input(shape=(latent_dim,), name='z_p')
+    z_p = Input(shape=latent_shape, name='z_p')
 
     # Build computational graph
 
@@ -120,31 +126,31 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
     x_tilde = decoder(z)
     x_p = decoder(z_p)
 
-    dis_x = discriminator(x)
-    dis_x_tilde = discriminator(x_tilde)
-    dis_x_p = discriminator(x_p)
+    dis_x, dis_feat = discriminator(x)
+    dis_x_tilde, dis_feat_tilde = discriminator(x_tilde)
+    dis_x_p = discriminator(x_p)[0]
 
     # Compute losses
 
     # Learned similarity metric
-    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_x[1], dis_x_tilde[1])
+    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_feat, dis_feat_tilde)
 
     # KL divergence loss
     kl_loss = K.mean(-0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1))
 
     # Create models for training
-    encoder_train = Model(x, dis_x_tilde[1], name='e')
+    encoder_train = Model(x, dis_feat_tilde, name='e')
     encoder_train.add_loss(kl_loss)
     encoder_train.add_loss(dis_nll_loss)
 
-    decoder_train = Model([x, z_p], [dis_x_tilde[0], dis_x_p[0]], name='de')
+    decoder_train = Model([x, z_p], [dis_x_tilde, dis_x_p], name='de')
     normalized_weight = recon_vs_gan_weight / (1. - recon_vs_gan_weight)
     decoder_train.add_loss(normalized_weight * dis_nll_loss)
 
-    discriminator_train = Model([x, z_p], [dis_x[0], dis_x_tilde[0], dis_x_p[0]], name='di')
+    discriminator_train = Model([x, z_p], [dis_x, dis_x_tilde, dis_x_p], name='di')
 
     # Additional models for testing
     vae = Model(x, x_tilde, name='vae')
-    vaegan = Model(x, dis_x_tilde[0], name='vaegan')
+    vaegan = Model(x, dis_x_tilde, name='vaegan')
 
-    return encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan
+    return encoder_train, decoder_train, discriminator_train, vae, vaegan
