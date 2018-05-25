@@ -15,7 +15,7 @@ from vaegan.callbacks import DecoderOutputGenerator
 
 
 def main():
-    encoder, decoder, discriminator, encoder_train, decoder_train, vae, vaegan = create_models()
+    encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan = create_models()
 
     vaegan.summary()
 
@@ -29,18 +29,20 @@ def main():
 
     rmsprop = RMSprop(lr=0.0003)
 
-    discriminator.name = 'di'
-    discriminator.compile(rmsprop, 'binary_crossentropy', ['accuracy'])
-    discriminator.trainable = False
-
-    decoder.trainable = False
-    encoder_train.name = 'e'
-    encoder_train.compile(rmsprop)
-
     encoder.trainable = False
+    decoder.trainable = False
+    discriminator_train.name = 'di'
+    discriminator_train.compile(rmsprop, ['binary_crossentropy'] * 3, ['acc'] * 3)
+
+    discriminator.trainable = False
     decoder.trainable = True
     decoder_train.name = 'de'
-    decoder_train.compile(rmsprop, 2 * ['binary_crossentropy'], 2 * ['acc'])
+    decoder_train.compile(rmsprop, ['binary_crossentropy'] * 2, ['acc'] * 2)
+
+    decoder.trainable = False
+    encoder.trainable = True
+    encoder_train.name = 'e'
+    encoder_train.compile(rmsprop)
 
 
     checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
@@ -52,15 +54,14 @@ def main():
 
     steps_per_epoch = NUM_SAMPLES // batch_size
 
-    img_loader = celeba_loader(batch_size)
+    img_loader = celeba_loader(batch_size, num_child=3)
     dis_loader = discriminator_loader(img_loader)
-    dis_loader_f = discriminator_loader_fake(vae, decoder, img_loader)
     dec_loader = decoder_loader(img_loader)
     enc_loader = encoder_loader(img_loader)
 
-    models = [discriminator, discriminator, decoder_train, encoder_train]
-    generators = [dis_loader, dis_loader_f, dec_loader, enc_loader]
-    metrics = [{'di_loss': 0, 'di_acc': 1}, {'di_loss_f': 0, 'di_acc_f': 1}, {'de_loss': 0, 'de_acc': 3, 'de_acc_p': 5}, {'en_loss': 0}]
+    models = [discriminator_train, decoder_train, encoder_train]
+    generators = [dis_loader, dec_loader, enc_loader]
+    metrics = [{'di_loss': 0, 'di_acc': 1}, {'de_loss': 0, 'de_acc': 3, 'de_acc_p': 5}, {'en_loss': 0}]
 
     fit_models(vaegan, models, generators, metrics, batch_size,
                steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch)

@@ -84,19 +84,15 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
         Conv2D(n_channels, 5, activation='tanh', padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='output_image')
     ], name='decoder')
 
-    # Discriminator features at the 9th layer
-    discriminator_features = Sequential([
-        Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', input_shape=image_shape),
-        LeakyReLU(leaky_relu_alpha),
-        *conv_block(None, 128, leaky=True),
-        *conv_block(None, 256, leaky=True),
-        conv_block(None, 256, leaky=True)[0]
-    ], name='discriminator_features')
-
     # Complete discriminator model
     dis_input = Input(shape=image_shape, name='discriminator_input')
-    d = discriminator_features(dis_input)
-    d = BatchNormalization()(d)
+
+    d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input),
+    d = LeakyReLU(leaky_relu_alpha)(d)
+    d = conv_block(d, 128, leaky=True)
+    d = conv_block(d, 256, leaky=True)
+    d_feat = conv_block(None, 256, leaky=True)[0](d)
+    d = BatchNormalization(momentum=bn_mom, epsilon=bn_eps)(d_feat)
     d = LeakyReLU(leaky_relu_alpha)(d)
     d = Flatten()(d)
     d = Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
@@ -104,37 +100,38 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
     d = LeakyReLU(leaky_relu_alpha)(d)
     d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
 
-    discriminator = Model(dis_input, d, name='discriminator')
-
-    # Reconstructed output of VAE
-    x_tilde = decoder(sampler(encoder.outputs))
-
-    # Learned similarity metric
-    dis_feat_tilde = discriminator_features(x_tilde)
-    dis_feat = discriminator_features(x)
-    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_feat, dis_feat_tilde)
+    discriminator = Model(dis_input, [d, d_feat], name='discriminator')
 
     # KL divergence loss
     kl_loss = -0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
     vae_loss = K.mean(kl_loss)
 
-    encoder_train = Model(x, [dis_feat, dis_feat_tilde], name='encoder')
-    encoder_train.add_loss(vae_loss)
-    encoder_train.add_loss(dis_nll_loss)
+    # Reconstructed output of VAE
+    x_tilde = decoder(sampler(encoder.outputs))
 
     # z_p is sampled directly from isotropic gaussian
     z_p = Input(shape=(latent_dim,), name='z_p')
     x_p = decoder(z_p)
 
-    dis_tilde = discriminator(x_tilde)
-    dis_p = discriminator(x_p)
+    dis_x = discriminator(x)
+    dis_x_tilde = discriminator(x_tilde)
+    dis_x_p = discriminator(x_p)
 
-    decoder_train = Model([x, z_p], [dis_tilde, dis_p], name='decoder')
+    # Learned similarity metric
+    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_x[1], dis_x_tilde[1])
+
+    encoder_train = Model(x, [dis_x[1], dis_x_tilde[1]], name='encoder')
+    encoder_train.add_loss(vae_loss)
+    encoder_train.add_loss(dis_nll_loss)
+
+    decoder_train = Model([x, z_p], [dis_x_tilde[0], dis_x_p[0]], name='decoder')
     normalized_weight = recon_vs_gan_weight / (1. - recon_vs_gan_weight)
     decoder_train.add_loss(normalized_weight * dis_nll_loss)
 
+    discriminator_train = Model([x, z_p], [dis_x[0], dis_x_tilde[0], dis_x_p[0]], name='discriminator')
+
     vae = Model(x, x_tilde, name='vae')
 
-    vaegan = Model(x, dis_tilde, name='vaegan')
+    vaegan = Model(x, dis_x_tilde[0], name='vaegan')
 
-    return encoder, decoder, discriminator, encoder_train, decoder_train, vae, vaegan
+    return encoder, decoder, discriminator, encoder_train, decoder_train, discriminator_train, vae, vaegan

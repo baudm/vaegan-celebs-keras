@@ -76,28 +76,18 @@ def mnist_loader(batch_size, normalize=True, num_child=4, seed=0, workers=8):
                 yield batch_images
 
 
-def discriminator_loader(img_loader):
-    while True:
-        x = next(img_loader)
-        batch_size = x.shape[0]
-        y = np.ones([batch_size, 1], dtype='float32')
-        yield x, y
-
-
-def discriminator_loader_fake(vae, decoder, img_loader, latent_dim=128, seed=0):
+def discriminator_loader(img_loader, latent_dim=128, seed=0):
     rng = np.random.RandomState(seed)
     while True:
         x = next(img_loader)
         batch_size = x.shape[0]
-        half_batch = batch_size // 2
+        # Sample z from isotropic Gaussian
+        z_p = rng.normal(size=(batch_size, latent_dim))
 
-        x_tilde = vae.predict(x[:half_batch])
-        z_p = rng.normal(size=(half_batch, latent_dim))
-        x_p = decoder.predict(z_p)
-        inputs = np.concatenate([x_tilde, x_p])
-        y = np.zeros([2 * half_batch, 1], dtype='float32')
+        y_real = np.ones((batch_size,), dtype='float32')
+        y_fake = np.zeros((batch_size,), dtype='float32')
 
-        yield inputs, y
+        yield [x, z_p], [y_real, y_fake, y_fake]
 
 
 def decoder_loader(img_loader, latent_dim=128, seed=0):
@@ -108,7 +98,7 @@ def decoder_loader(img_loader, latent_dim=128, seed=0):
         # Sample z from isotropic Gaussian
         z_p = rng.normal(size=(batch_size, latent_dim))
         # Label as real
-        y_real = np.ones([batch_size, 1], dtype='float32')
+        y_real = np.ones((batch_size,), dtype='float32')
         yield [x, z_p], [y_real, y_real]
 
 
