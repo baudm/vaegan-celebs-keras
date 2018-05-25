@@ -87,7 +87,7 @@ def create_models(recon_vs_gan_weight=1e-6, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6
     # Complete discriminator model
     dis_input = Input(shape=image_shape, name='discriminator_input')
 
-    d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input),
+    d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(dis_input)
     d = LeakyReLU(leaky_relu_alpha)(d)
     d = conv_block(d, 128, leaky=True)
     d = conv_block(d, 256, leaky=True)
