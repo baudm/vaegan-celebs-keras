@@ -70,7 +70,7 @@ def main():
 
     models = [discriminator_train, decoder_train, encoder_train]
     generators = [dis_loader, dec_loader, enc_loader]
-    metrics = [{'di_loss': 1, 'di_loss_t': 2, 'di_loss_p': 3, 'di_acc': 4, 'di_acc_t': 7, 'di_acc_p': 10}, {'de_loss_t': 1, 'de_loss_p': 2, 'de_acc_t': 3, 'de_acc_p': 5}, {'en_loss': 0}]
+    metrics = [{'di_l': 1, 'di_l_t': 2, 'di_l_p': 3, 'di_a': 4, 'di_a_t': 7, 'di_a_p': 10}, {'de_l_t': 1, 'de_l_p': 2, 'de_a_t': 3, 'de_a_p': 5}, {'en_l': 0}]
 
     fit_models(vaegan, models, generators, metrics, batch_size,
                steps_per_epoch=steps_per_epoch, callbacks=callbacks, epochs=epochs, initial_epoch=initial_epoch)
