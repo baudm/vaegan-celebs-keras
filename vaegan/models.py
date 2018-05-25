@@ -11,7 +11,7 @@ from keras.regularizers import l2
 from .losses import mean_gaussian_negative_log_likelihood
 
 
-def create_base_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
+def create_base_models(recon_depth=9, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
 
     image_shape = (64, 64, 3)
     n_channels = image_shape[-1]
@@ -38,7 +38,7 @@ def create_base_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
 
     # Encoder
     def create_encoder():
-        x = Input(shape=image_shape, name='input_image')
+        x = Input(shape=image_shape, name='encoder_input')
 
         y = conv_block(x, 64)
         y = conv_block(y, 128)
@@ -69,20 +69,28 @@ def create_base_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
     def create_discriminator():
         x = Input(shape=image_shape, name='discriminator_input')
 
-        d = Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(x)
-        d = LeakyReLU(leaky_relu_alpha)(d)
-        d = conv_block(d, 128, leaky=True)
-        d = conv_block(d, 256, leaky=True)
-        d_feat = conv_block(None, 256, leaky=True)[0](d)
-        d = BatchNormalization(momentum=bn_mom, epsilon=bn_eps)(d_feat)
-        d = LeakyReLU(leaky_relu_alpha)(d)
-        d = Flatten()(d)
-        d = Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
-        d = BatchNormalization()(d)
-        d = LeakyReLU(leaky_relu_alpha)(d)
-        d = Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')(d)
+        layers = [
+            Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform'),
+            LeakyReLU(leaky_relu_alpha),
+            *conv_block(None, 128, leaky=True),
+            *conv_block(None, 256, leaky=True),
+            *conv_block(None, 256, leaky=True),
+            Flatten(),
+            Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform'),
+            BatchNormalization(),
+            LeakyReLU(leaky_relu_alpha),
+            Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform')
+        ]
 
-        return Model(x, [d, d_feat], name='discriminator')
+        y = x
+        y_feat = None
+        for i, layer in enumerate(layers, 1):
+            y = layer(y)
+            # Output the features at the specified depth
+            if i == recon_depth:
+                y_feat = y
+
+        return Model(x, [y, y_feat], name='discriminator')
 
     encoder = create_encoder()
     discriminator = create_discriminator()
