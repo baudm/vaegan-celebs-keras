@@ -9,7 +9,7 @@ import numpy as np
 from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.optimizers import RMSprop
 
-from vaegan.models import create_base_models, create_train_and_test_models
+from vaegan.models import create_models, build_graph
 from vaegan.training import fit_models
 from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
 from vaegan.callbacks import DecoderOutputGenerator
@@ -22,8 +22,8 @@ def set_trainable(model, trainable):
 
 
 def main():
-    encoder, decoder, discriminator = create_base_models()
-    encoder_train, decoder_train, discriminator_train, vae, vaegan = create_train_and_test_models(encoder, decoder, discriminator)
+    encoder, decoder, discriminator = create_models()
+    encoder_train, decoder_train, discriminator_train, vae, vaegan = build_graph(encoder, decoder, discriminator)
 
     if len(sys.argv) == 3:
         vaegan.load_weights(sys.argv[1])
