@@ -47,3 +47,16 @@ class DecoderSnapshot(Callback):
             rows.append(np.concatenate(images[i:(i + 4), :, :, :], axis=0))
         plot = np.concatenate(rows, axis=1).squeeze()
         Image.fromarray(plot).save(filename)
+
+
+class ModelsCheckpoint(Callback):
+
+    def __init__(self, epoch_format, *models):
+        super().__init__()
+        self._epoch_format = epoch_format
+        self._models = models
+
+    def on_epoch_end(self, epoch, logs=None):
+        suffix = self._epoch_format.format(epoch=epoch + 1, **logs)
+        for model in self._models:
+            model.save_weights(model.name + suffix)
