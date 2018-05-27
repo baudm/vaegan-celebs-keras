@@ -10,7 +10,7 @@ from keras.callbacks import Callback
 
 class DecoderOutputGenerator(Callback):
 
-    def __init__(self, step_size=5, latent_dim=128, decoder_index=-2):
+    def __init__(self, step_size=200, latent_dim=128, decoder_index=-2):
         super().__init__()
         self._step_size = step_size
         self._steps = 0
