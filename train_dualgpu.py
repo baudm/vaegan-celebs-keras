@@ -39,6 +39,7 @@ def set_trainable(model, trainable):
 
 
 def main():
+    model_s = Model(inputs=inputs, outputs=outputs)
     model = ModelMGPU(model_s, gpus=2) #try implementation
     encoder, decoder, discriminator = create_models()
     encoder_train, decoder_train, discriminator_train, vae, vaegan = build_graph(encoder, decoder, discriminator)
