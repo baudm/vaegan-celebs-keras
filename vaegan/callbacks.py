@@ -8,20 +8,22 @@ from PIL import Image
 from keras.callbacks import Callback
 
 
-class DecoderOutputGenerator(Callback):
+class DecoderSnapshot(Callback):
 
     def __init__(self, step_size=200, latent_dim=128, decoder_index=-2):
         super().__init__()
         self._step_size = step_size
         self._steps = 0
+        self._epoch = 0
         self._latent_dim = latent_dim
         self._decoder_index = decoder_index
         self._img_rows = 64
         self._img_cols = 64
         self._thread_pool = ThreadPoolExecutor(1)
 
-    # def on_epoch_begin(self, epoch, logs=None):
-    #     self._steps = 0
+    def on_epoch_begin(self, epoch, logs=None):
+        self._epoch = epoch
+        self._steps = 0
 
     def on_batch_begin(self, batch, logs=None):
         self._steps += 1
@@ -30,7 +32,7 @@ class DecoderOutputGenerator(Callback):
 
     def plot_images(self, samples=16):
         decoder = self.model.layers[self._decoder_index]
-        filename = "generated_%d.png" % self._steps
+        filename = 'generated_%d_%d.png' % (self._epoch, self._steps)
         z = np.random.normal(size=(samples, self._latent_dim))
         images = decoder.predict(z)
         self._thread_pool.submit(self.save_plot, images, filename)

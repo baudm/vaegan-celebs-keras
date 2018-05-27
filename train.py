@@ -12,7 +12,7 @@ from keras.optimizers import RMSprop
 from vaegan.models import create_models, build_graph
 from vaegan.training import fit_models
 from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
-from vaegan.callbacks import DecoderOutputGenerator
+from vaegan.callbacks import DecoderSnapshot
 
 
 def set_trainable(model, trainable):
@@ -53,7 +53,7 @@ def main():
     set_trainable(vaegan, True)
 
     checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
-    decoder_sampler = DecoderOutputGenerator()
+    decoder_sampler = DecoderSnapshot()
 
     callbacks = [checkpoint, decoder_sampler, TensorBoard()]
 
