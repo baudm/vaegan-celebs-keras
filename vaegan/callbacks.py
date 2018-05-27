@@ -43,7 +43,7 @@ class DecoderSnapshot(Callback):
         images = np.clip(images, 0., 255.)
         images = images.astype('uint8')
         rows = []
-        for i in range(4):
+        for i in range(0, len(images), 4):
             rows.append(np.concatenate(images[i:(i + 4), :, :, :], axis=0))
         plot = np.concatenate(rows, axis=1).squeeze()
         Image.fromarray(plot).save(filename)
