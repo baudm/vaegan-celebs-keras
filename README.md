@@ -2,8 +2,7 @@
 EE 298 Group 6:
 
 
-Darwin Bautista
-Paolo Valdez
+Darwin Bautista | Paolo Valdez
 
 Hello!
 
@@ -11,10 +10,14 @@ This is our implementation of "Autoencoding beyond pixels using a learned simila
 
 # Prequisites
 
-Tensorflow >=1.4
-Keras >= 2.1.4
-OpenCV >= 3.4.0
+Tensorflow (>=1.4)
+
+Keras (>= 2.1.4)
+
+OpenCV (>= 3.4.0)
+
 Numpy
+
 
 # Dataset
 Available @ http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
@@ -31,7 +34,18 @@ https://drive.google.com/open?id=1ELiB3GNeT_I9RyTqpeoNNQ2CoOZ-v81X
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/celebA_sample_dataset.jpg "Logo Title Text 1")
 
 # Architecture 
+Variational Auto Encoder (VAE)
+    Encoder Training Model
 
+    ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_encoder.jpg "Logo Title Text 1")
+
+    Decoder Training Model
+
+    ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_decoder.jpg"Logo Title Text 1")
+
+General Adverserial Network (GAN)
+
+  ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_discriminator.jpg" GAN ")
 
 # Generated Image Results:
 
