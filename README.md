@@ -15,3 +15,28 @@ RMS Prop
 
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/RMSprop.gif "Logo Title Text 1")
 
+
+Adagrad
+
+
+
+
+
+
+
+
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/Adagrad.gif "Logo Title Text 1")
+
+
+Adadelta
+
+
+
+
+
+
+
+
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/Adadelta.gif "Logo Title Text 1")
+
+
