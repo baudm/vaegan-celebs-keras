@@ -39,11 +39,11 @@ Encoder Training Model
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_encoder.jpg "Logo Title Text 1")
 
 Decoder Training Model
-
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_decoder.jpg"Logo Title Text 1")
 
 # General Adverserial Network (GAN) Architecture
 
+Discriminator Training Model
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_discriminator.jpg" GAN ")
 
 # Generated Image Results:
