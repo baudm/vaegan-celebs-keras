@@ -9,19 +9,31 @@ Hello!
 
 This is our implementation of "Autoencoding beyond pixels using a learned similarity metric" by Larsen et al. (https://arxiv.org/abs/1512.09300)
 
-Our Presentation Material can be forund at: 
+# Prequisites
+
+Tensorflow >=1.4
+Keras >= 2.1.4
+OpenCV >= 3.4.0
+Numpy
+
+# Dataset
+Available @ http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html
+
+# Presenstation Slides
+Our Presentation Material can be found at: 
 https://docs.google.com/presentation/d/1PhjrLkPf-UstSI_oZXod0qb4k_HsPbtNlm9ekJE4gvY/edit?usp=sharing
 
-Pre-trained weights:
+# Pre-trained weights:
 https://drive.google.com/open?id=1ELiB3GNeT_I9RyTqpeoNNQ2CoOZ-v81X
 
-Data sample:
+# Data sample:
 
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/celebA_sample_dataset.jpg "Logo Title Text 1")
 
+# Architecture 
 
 
-Generated Image Results:
+# Generated Image Results:
 
 RMS Prop
 
