@@ -4,7 +4,6 @@ EE 298 Group 6:
 
 Darwin Bautista
 Paolo Valdez
-Leiko Ravelo
 
 Hello!
 
@@ -12,6 +11,9 @@ This is our implementation of "Autoencoding beyond pixels using a learned simila
 
 Our Presentation Material can be forund at: 
 https://docs.google.com/presentation/d/1PhjrLkPf-UstSI_oZXod0qb4k_HsPbtNlm9ekJE4gvY/edit?usp=sharing
+
+Pre-trained weights:
+https://drive.google.com/open?id=1ELiB3GNeT_I9RyTqpeoNNQ2CoOZ-v81X
 
 Data sample:
 
