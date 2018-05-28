@@ -4,28 +4,30 @@ import numpy as np
 
 from keras import backend as K
 from keras.models import Sequential, Model
-from keras.layers import Input, Conv2D, BatchNormalization, Activation, Dense, Conv2DTranspose, Flatten, Reshape, \
-    Lambda
+from keras.layers import Input, Conv2D, BatchNormalization, Dense, Conv2DTranspose, Flatten, Reshape, \
+    Lambda, LeakyReLU, Activation
 from keras.regularizers import l2
 
+from .losses import mean_gaussian_negative_log_likelihood
 
-def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
-    image_shape = (64, 64, 1)
-    n_channels = image_shape[-1]
+
+def create_models(n_channels=3, recon_depth=9, wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
+
+    image_shape = (64, 64, n_channels)
     n_encoder = 1024
     n_discriminator = 512
     latent_dim = 128
-    epsilon_std = 1.0
     decode_from_shape = (8, 8, 256)
     n_decoder = np.prod(decode_from_shape)
-    l2_regularizer = l2(wdecay)
+    leaky_relu_alpha = 0.2
 
-    def conv_block(x, filters, transpose=False):
+    def conv_block(x, filters, leaky=True, transpose=False, name=''):
         conv = Conv2DTranspose if transpose else Conv2D
+        activation = LeakyReLU(leaky_relu_alpha) if leaky else Activation('relu')
         layers = [
-            conv(filters, 5, strides=2, padding='same', kernel_regularizer=l2_regularizer),
-            BatchNormalization(momentum=bn_mom, epsilon=bn_eps),
-            Activation('relu')
+            conv(filters, 5, strides=2, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name=name + 'conv'),
+            BatchNormalization(momentum=bn_mom, epsilon=bn_eps, name=name + 'bn'),
+            activation
         ]
         if x is None:
             return layers
@@ -34,68 +36,128 @@ def create_models(wdecay=1e-5, bn_mom=0.9, bn_eps=1e-6):
         return x
 
     # Encoder
-    enc_input = Input(shape=image_shape, name='input_image')
-    x = enc_input
-    for f in [64, 128, 256]:
-        x = conv_block(x, f)
-    x = Flatten()(x)
-    x = Dense(n_encoder, kernel_regularizer=l2_regularizer)(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
+    def create_encoder():
+        x = Input(shape=image_shape, name='enc_input')
 
-    z_mean = Dense(latent_dim, name='z_mean')(x)
-    z_log_var = Dense(latent_dim, name='z_log_var')(x)
+        y = conv_block(x, 64, name='enc_blk_1_')
+        y = conv_block(y, 128, name='enc_blk_2_')
+        y = conv_block(y, 256, name='enc_blk_3_')
+        y = Flatten()(y)
+        y = Dense(n_encoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='enc_h_dense')(y)
+        y = BatchNormalization(name='enc_h_bn')(y)
+        y = LeakyReLU(leaky_relu_alpha)(y)
 
-    encoder = Model(enc_input, [z_mean, z_log_var], name='encoder')
+        z_mean = Dense(latent_dim, name='z_mean', kernel_initializer='he_uniform')(y)
+        z_log_var = Dense(latent_dim, name='z_log_var', kernel_initializer='he_uniform')(y)
 
-    def sampling(args):
-        z_mean, z_log_var = args
-        epsilon = K.random_normal(shape=(K.shape(z_mean)[0], latent_dim), mean=0.,
-                                  stddev=epsilon_std)
-        return z_mean + K.exp(z_log_var / 2) * epsilon
-
-    sampling_layer = Lambda(sampling, output_shape=(latent_dim,))
+        return Model(x, [z_mean, z_log_var], name='encoder')
 
     # Decoder
     decoder = Sequential([
-        Dense(n_decoder, kernel_regularizer=l2_regularizer, input_shape=(latent_dim,)),
-        BatchNormalization(),
-        Activation('relu'),
+        Dense(n_decoder, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', input_shape=(latent_dim,), name='dec_h_dense'),
+        BatchNormalization(name='dec_h_bn'),
+        LeakyReLU(leaky_relu_alpha),
         Reshape(decode_from_shape),
-        *conv_block(None, 256, transpose=True),
-        *conv_block(None, 128, transpose=True),
-        *conv_block(None, 32, transpose=True),
-        Conv2D(n_channels, 5, activation='tanh', padding='same', kernel_regularizer=l2_regularizer, name='output_image')
+        *conv_block(None, 256, transpose=True, name='dec_blk_1_'),
+        *conv_block(None, 128, transpose=True, name='dec_blk_2_'),
+        *conv_block(None, 32, transpose=True, name='dec_blk_3_'),
+        Conv2D(n_channels, 5, activation='tanh', padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='dec_output')
     ], name='decoder')
 
     # Discriminator
-    discriminator = Sequential([
-        Conv2D(32, 5, activation='relu', padding='same', kernel_regularizer=l2_regularizer, input_shape=image_shape),
-        *conv_block(None, 128),
-        *conv_block(None, 256),
-        *conv_block(None, 256),
-        Flatten(),
-        Dense(n_discriminator, kernel_regularizer=l2_regularizer),
-        BatchNormalization(),
-        Activation('relu'),
-        Dense(1, activation='sigmoid', kernel_regularizer=l2_regularizer)
-    ], name='discriminator')
+    def create_discriminator():
+        x = Input(shape=image_shape, name='dis_input')
 
-    vae = Model(encoder.inputs, decoder(sampling_layer(encoder.outputs)), name='vae')
+        layers = [
+            Conv2D(32, 5, padding='same', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='dis_blk_1_conv'),
+            LeakyReLU(leaky_relu_alpha),
+            *conv_block(None, 128, leaky=True, name='dis_blk_2_'),
+            *conv_block(None, 256, leaky=True, name='dis_blk_3_'),
+            *conv_block(None, 256, leaky=True, name='dis_blk_4_'),
+            Flatten(),
+            Dense(n_discriminator, kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='dis_dense'),
+            BatchNormalization(name='dis_bn'),
+            LeakyReLU(leaky_relu_alpha),
+            Dense(1, activation='sigmoid', kernel_regularizer=l2(wdecay), kernel_initializer='he_uniform', name='dis_output')
+        ]
 
-    kl_loss = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-    vae_loss = K.mean(kl_loss)
+        y = x
+        y_feat = None
+        for i, layer in enumerate(layers, 1):
+            y = layer(y)
+            # Output the features at the specified depth
+            if i == recon_depth:
+                y_feat = y
 
-    vaegan = Model(vae.inputs, discriminator(vae.outputs), name='vaegan')
-    vaegan.add_loss(vae_loss)
+        return Model(x, [y, y_feat], name='discriminator')
 
-    return encoder, decoder, discriminator, vae, vae_loss
+    encoder = create_encoder()
+    discriminator = create_discriminator()
+
+    return encoder, decoder, discriminator
 
 
-# from keras.utils.vis_utils import plot_model
-# e, d, dis, vae, gan = create_models()
-# plot_model(e, show_shapes=True, to_file='encoder.png')
-# plot_model(d, show_shapes=True, to_file='decoder.png')
-# plot_model(dis, show_shapes=True, to_file='discriminator.png')
-# plot_model(vae, show_shapes=True, to_file='vae.png')
-# plot_model(gan, show_shapes=True, to_file=' gan.png')
+def _sampling(args):
+    """Reparameterization trick by sampling fr an isotropic unit Gaussian.
+       Instead of sampling from Q(z|X), sample eps = N(0,I)
+
+    # Arguments:
+        args (tensor): mean and log of variance of Q(z|X)
+    # Returns:
+        z (tensor): sampled latent vector
+    """
+    z_mean, z_log_var = args
+    batch = K.shape(z_mean)[0]
+    dim = K.int_shape(z_mean)[1]
+    # by default, random_normal has mean=0 and std=1.0
+    epsilon = K.random_normal(shape=(batch, dim))
+    return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
+
+def build_graph(encoder, decoder, discriminator, recon_vs_gan_weight=1e-6):
+    image_shape = K.int_shape(encoder.input)[1:]
+    latent_shape = K.int_shape(decoder.input)[1:]
+
+    sampler = Lambda(_sampling, output_shape=latent_shape, name='sampler')
+
+    # Inputs
+    x = Input(shape=image_shape, name='input_image')
+    # z_p is sampled directly from isotropic gaussian
+    z_p = Input(shape=latent_shape, name='z_p')
+
+    # Build computational graph
+
+    z_mean, z_log_var = encoder(x)
+    z = sampler([z_mean, z_log_var])
+
+    x_tilde = decoder(z)
+    x_p = decoder(z_p)
+
+    dis_x, dis_feat = discriminator(x)
+    dis_x_tilde, dis_feat_tilde = discriminator(x_tilde)
+    dis_x_p = discriminator(x_p)[0]
+
+    # Compute losses
+
+    # Learned similarity metric
+    dis_nll_loss = mean_gaussian_negative_log_likelihood(dis_feat, dis_feat_tilde)
+
+    # KL divergence loss
+    kl_loss = K.mean(-0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1))
+
+    # Create models for training
+    encoder_train = Model(x, dis_feat_tilde, name='e')
+    encoder_train.add_loss(kl_loss)
+    encoder_train.add_loss(dis_nll_loss)
+
+    decoder_train = Model([x, z_p], [dis_x_tilde, dis_x_p], name='de')
+    normalized_weight = recon_vs_gan_weight / (1. - recon_vs_gan_weight)
+    decoder_train.add_loss(normalized_weight * dis_nll_loss)
+
+    discriminator_train = Model([x, z_p], [dis_x, dis_x_tilde, dis_x_p], name='di')
+
+    # Additional models for testing
+    vae = Model(x, x_tilde, name='vae')
+    vaegan = Model(x, dis_x_tilde, name='vaegan')
+
+    return encoder_train, decoder_train, discriminator_train, vae, vaegan

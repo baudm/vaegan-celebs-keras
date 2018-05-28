@@ -1,19 +1,36 @@
 #!/usr/bin/env python3
 
+import os
 import sys
-import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras.optimizers import RMSprop
 
 from vaegan.models import create_models, build_graph
 from vaegan.training import fit_models
 from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
-from vaegan.callbacks import DecoderSnapshot, ModelsCheckpoint
+from vaegan.callbacks import DecoderSnapshot
 
+from keras.utils import multi_gpu_model
+
+class ModelMGPU(Model):
+    def __init__(self, ser_model, gpus):
+        pmodel = multi_gpu_model(ser_model, gpus)
+        self.__dict__.update(pmodel.__dict__)
+        self._smodel = ser_model
+
+    def __getattribute__(self, attrname):
+        '''Override load and save methods to be used from the serial-model. The
+        serial-model holds references to the weights in the multi-gpu model.
+        '''
+        # return Model.__getattribute__(self, attrname)
+        if 'load' in attrname or 'save' in attrname:
+            return getattr(self._smodel, attrname)
+
+        return super(ModelMGPU, self).__getattribute__(attrname)
 
 def set_trainable(model, trainable):
     model.trainable = trainable
@@ -22,23 +39,19 @@ def set_trainable(model, trainable):
 
 
 def main():
+    model_s = Model(inputs=inputs, outputs=outputs)
+    model = ModelMGPU(model_s, gpus=2) #try implementation
     encoder, decoder, discriminator = create_models()
     encoder_train, decoder_train, discriminator_train, vae, vaegan = build_graph(encoder, decoder, discriminator)
 
-    try:
-        initial_epoch = int(sys.argv[1])
-    except (IndexError, ValueError):
+    if len(sys.argv) == 3:
+        vaegan.load_weights(sys.argv[1])
+        initial_epoch = int(sys.argv[2])
+    else:
         initial_epoch = 0
 
-    epoch_format = '.{epoch:03d}.h5'
-
-    if initial_epoch != 0:
-        suffix = epoch_format.format(epoch=initial_epoch)
-        encoder.load_weights('encoder' + suffix)
-        decoder.load_weights('decoder' + suffix)
-        discriminator.load_weights('discriminator' + suffix)
-
     batch_size = 64
+
     rmsprop = RMSprop(lr=0.0003)
 
     set_trainable(encoder, False)
@@ -58,12 +71,12 @@ def main():
 
     set_trainable(vaegan, True)
 
-    checkpoint = ModelsCheckpoint(epoch_format, encoder, decoder, discriminator)
+    checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
     decoder_sampler = DecoderSnapshot()
 
     callbacks = [checkpoint, decoder_sampler, TensorBoard()]
 
-    epochs = 250
+    epochs = 100
 
     steps_per_epoch = NUM_SAMPLES // batch_size
 
@@ -82,8 +95,7 @@ def main():
                            steps_per_epoch=steps_per_epoch, callbacks=callbacks,
                            epochs=epochs, initial_epoch=initial_epoch)
 
-    with open('histories.pickle', 'wb') as f:
-        pickle.dump(histories, f)
+    vaegan.save_weights('trained.h5')
 
     x = next(celeba_loader(1))
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
+import os
 import sys
-import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from keras.callbacks import TensorBoard
-from keras.optimizers import RMSprop
+from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.optimizers import Adagrad
 
 from vaegan.models import create_models, build_graph
 from vaegan.training import fit_models
 from vaegan.data import celeba_loader, encoder_loader, decoder_loader, discriminator_loader, NUM_SAMPLES, mnist_loader
-from vaegan.callbacks import DecoderSnapshot, ModelsCheckpoint
+from vaegan.callbacks import DecoderSnapshot
 
 
 def set_trainable(model, trainable):
@@ -25,45 +25,39 @@ def main():
     encoder, decoder, discriminator = create_models()
     encoder_train, decoder_train, discriminator_train, vae, vaegan = build_graph(encoder, decoder, discriminator)
 
-    try:
-        initial_epoch = int(sys.argv[1])
-    except (IndexError, ValueError):
+    if len(sys.argv) == 3:
+        vaegan.load_weights(sys.argv[1])
+        initial_epoch = int(sys.argv[2])
+    else:
         initial_epoch = 0
 
-    epoch_format = '.{epoch:03d}.h5'
-
-    if initial_epoch != 0:
-        suffix = epoch_format.format(epoch=initial_epoch)
-        encoder.load_weights('encoder' + suffix)
-        decoder.load_weights('decoder' + suffix)
-        discriminator.load_weights('discriminator' + suffix)
-
     batch_size = 64
-    rmsprop = RMSprop(lr=0.0003)
+
+    opt = Adagrad(lr=0.01, epsilon=None, decay=0.0)
 
     set_trainable(encoder, False)
     set_trainable(decoder, False)
-    discriminator_train.compile(rmsprop, ['binary_crossentropy'] * 3, ['acc'] * 3)
+    discriminator_train.compile(opt, ['binary_crossentropy'] * 3, ['acc'] * 3)
     discriminator_train.summary()
 
     set_trainable(discriminator, False)
     set_trainable(decoder, True)
-    decoder_train.compile(rmsprop, ['binary_crossentropy'] * 2, ['acc'] * 2)
+    decoder_train.compile(opt, ['binary_crossentropy'] * 2, ['acc'] * 2)
     decoder_train.summary()
 
     set_trainable(decoder, False)
     set_trainable(encoder, True)
-    encoder_train.compile(rmsprop)
+    encoder_train.compile(opt)
     encoder_train.summary()
 
     set_trainable(vaegan, True)
 
-    checkpoint = ModelsCheckpoint(epoch_format, encoder, decoder, discriminator)
+    checkpoint = ModelCheckpoint(os.path.join('.', 'model.{epoch:02d}.h5'), save_weights_only=True)
     decoder_sampler = DecoderSnapshot()
 
     callbacks = [checkpoint, decoder_sampler, TensorBoard()]
 
-    epochs = 250
+    epochs = 100
 
     steps_per_epoch = NUM_SAMPLES // batch_size
 
@@ -82,8 +76,7 @@ def main():
                            steps_per_epoch=steps_per_epoch, callbacks=callbacks,
                            epochs=epochs, initial_epoch=initial_epoch)
 
-    with open('histories.pickle', 'wb') as f:
-        pickle.dump(histories, f)
+    vaegan.save_weights('trained.h5')
 
     x = next(celeba_loader(1))
 
