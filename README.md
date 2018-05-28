@@ -31,7 +31,7 @@ https://drive.google.com/open?id=1ELiB3GNeT_I9RyTqpeoNNQ2CoOZ-v81X
 
 # Data sample:
 
-![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/celebA_sample_dataset.jpg "Logo Title Text 1")
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/celeba_dataset.jpg "Logo Title Text 1")
  
 # Variational Auto Encoder (VAE) Architecture
 Encoder Training Model
@@ -48,7 +48,7 @@ Discriminator Training Model
 
 # Generated Image Results:
 
-RMS Prop
+RMS Prop as Optimizer
 
 
 
@@ -60,7 +60,7 @@ RMS Prop
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/RMSprop.gif "Logo Title Text 1")
 
 
-Adagrad
+Adagrad as Optimizer
 
 
 
@@ -72,7 +72,7 @@ Adagrad
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/Adagrad.gif "Logo Title Text 1")
 
 
-Adadelta
+Adadelta as Optimizer
 
 
 
