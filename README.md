@@ -32,20 +32,19 @@ https://drive.google.com/open?id=1ELiB3GNeT_I9RyTqpeoNNQ2CoOZ-v81X
 # Data sample:
 
 ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/celebA_sample_dataset.jpg "Logo Title Text 1")
+ 
+# Variational Auto Encoder (VAE) Architecture
+Encoder Training Model
 
-# Architecture 
-Variational Auto Encoder (VAE)
-    Encoder Training Model
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_encoder.jpg "Logo Title Text 1")
 
-    ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_encoder.jpg "Logo Title Text 1")
+Decoder Training Model
 
-    Decoder Training Model
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_decoder.jpg"Logo Title Text 1")
 
-    ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_decoder.jpg"Logo Title Text 1")
+# General Adverserial Network (GAN) Architecture
 
-General Adverserial Network (GAN)
-
-  ![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_discriminator.jpg" GAN ")
+![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/training_model_discriminator.jpg" GAN ")
 
 # Generated Image Results:
 
