@@ -7,6 +7,7 @@ Darwin Bautista | Paolo Valdez
 Hello!
 
 This is our implementation of "Autoencoding beyond pixels using a learned similarity metric" by Larsen et al. (https://arxiv.org/abs/1512.09300)
+Many of the implementation details (which were unclear in the paper) were directly lifted from the authors' [official code](https://github.com/andersbll/autoencoding_beyond_pixels)
 
 # Prequisites
 
@@ -48,39 +49,4 @@ Discriminator Training Model
 
 # Generated Image Results:
 
-RMS Prop as Optimizer
-
-
-
-
-
-
-
-
-![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/RMSprop.gif "Logo Title Text 1")
-
-
-Adagrad as Optimizer
-
-
-
-
-
-
-
-
-![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/Adagrad.gif "Logo Title Text 1")
-
-
-Adadelta as Optimizer
-
-
-
-
-
-
-
-
-![alt text](https://github.com/baudm/vaegan-celebs-keras/blob/master/Adadelta.gif "Logo Title Text 1")
-
-
+![Final Results](final-results.png)
